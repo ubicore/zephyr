@@ -26,7 +26,10 @@
 extern "C" {
 #endif
 
+
 #ifndef _ASMLANGUAGE
+extern FUNC_NORETURN void _thread_entry(k_thread_entry_t entry,
+			  void *p1, void *p2, void *p3);
 extern void _FaultInit(void);
 extern void _CpuIdleInit(void);
 static ALWAYS_INLINE void kernel_arch_init(void)
@@ -97,7 +100,9 @@ _arch_switch_to_main_thread(struct k_thread *main_thread,
 		*/
 		"mov %%r0, %3 \t\n"
 		"push {r2, lr} \t\n"
+		"push {r3, lr} \t\n"
 		"blx configure_mpu_stack_guard \t\n"
+		"pop {r3, lr} \t\n"
 		"pop {r2, lr} \t\n"
 #endif
 		/* branch to _thread_entry(_main, 0, 0, 0) */
