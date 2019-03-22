@@ -346,9 +346,11 @@
 
 // <e> NRFX_I2S_ENABLED - nrfx_i2s - I2S peripheral driver
 //==========================================================
-#ifndef NRFX_I2S_ENABLED
-#define NRFX_I2S_ENABLED 0
+
+#ifdef CONFIG_NRFX_I2S
+#define NRFX_I2S_ENABLED 1
 #endif
+
 // <o> NRFX_I2S_CONFIG_SCK_PIN - SCK pin  <0-31>
 
 
@@ -483,7 +485,7 @@
 // <7=> 7
 
 #ifndef NRFX_I2S_CONFIG_IRQ_PRIORITY
-#define NRFX_I2S_CONFIG_IRQ_PRIORITY 7
+#define NRFX_I2S_CONFIG_IRQ_PRIORITY 1
 #endif
 
 // <e> NRFX_I2S_CONFIG_LOG_ENABLED - Enables logging in the module.
@@ -2333,7 +2335,7 @@
 // <7=> 7
 
 #ifndef NRFX_TIMER_DEFAULT_CONFIG_IRQ_PRIORITY
-#define NRFX_TIMER_DEFAULT_CONFIG_IRQ_PRIORITY 7
+#define NRFX_TIMER_DEFAULT_CONFIG_IRQ_PRIORITY 1
 #endif
 
 // <e> NRFX_TIMER_CONFIG_LOG_ENABLED - Enables logging in the module.

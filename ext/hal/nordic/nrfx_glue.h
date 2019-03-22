@@ -183,7 +183,7 @@ extern "C" {
  *
  * @return Previous value of the atomic object.
  */
-#define NRFX_ATOMIC_FETCH_AND(p_data, value)  atomic_and(p_data, value)
+#define NRFX_ATOMIC_FETCH_AND(p_data, value)  atomic_and((atomic_t *)p_data, value)
 
 /**
  * @brief Macro for running a bitwise XOR operation on an atomic object

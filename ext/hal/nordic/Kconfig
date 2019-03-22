@@ -82,6 +82,13 @@ config NRFX_TWI
 config NRFX_TWIM
 	bool
 
+	
+config NRFX_I2S
+    bool "Select NRFX_I2S"
+    default n
+    help
+      This select NRFX_I2S driver
+
 config NRFX_UART
 	bool
 
