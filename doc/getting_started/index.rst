@@ -51,7 +51,7 @@ shell or ``cmd.exe`` prompt:
 
 .. note::
    See :ref:`gs_python_deps` for additional clarfication on using the
-   `--user` switch.
+   ``--user`` switch.
 
 Additional information about west's structure can be found
 :ref:`in the relevant west documentation section <west-struct>`.
@@ -100,10 +100,9 @@ Clone the Zephyr source code repositories from GitHub using the ``west`` tool:
 Running ``west init`` will clone west itself into ``./.west/west`` and
 initialize a local installation. Running ``west update`` will pull all the
 projects referenced by the manifest file (:file:`zephyr/west.yml`) into the
-folders specified in it. See :ref:`west-struct-installation` for additional
-details and a list of the folders and files that west will create as part of
-the process and :ref:`west-multi-repo` for more on how ``west`` helps manage
-multiple repositories.
+folders specified in it. See :ref:`west-multi-repo` for additional details, a
+list of the folders and files that west will create as part of the process,
+and more on how ``west`` helps manage multiple repositories.
 
 .. warning::
 
@@ -294,13 +293,13 @@ build target from an initialized build directory to get a list.
       :board: reel_board
       :goals: build
 
-The main build products are in :file:`zephyr/samples/hello_world/build/zephyr`.
+The main build products are in :file:`samples/hello_world/build/zephyr`.
 The final application binary in ELF format is named :file:`zephyr.elf` by
 default. Other binary formats and byproducts such as disassembly and map files
 will be present depending on the target and build system configuration.
 
 Other sample projects demonstrating Zephyr's features are located in
-:file:`zephyr/samples` and are documented in :ref:`samples-and-demos`.
+:zephyr_file:`samples` and are documented in :ref:`samples-and-demos`.
 
 Run the Application by Flashing to a Board
 ==========================================

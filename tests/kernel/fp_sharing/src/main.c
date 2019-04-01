@@ -24,7 +24,7 @@
  * FUTURE IMPROVEMENTS
  * On architectures where the non-integer capabilities are provided in a
  *  hierarchy, for example on IA-32 the USE_FP and USE_SSE options are provided,
- * this test should be enhanced to ensure that the architectures' _Swap()
+ * this test should be enhanced to ensure that the architectures' z_swap()
  * routine doesn't context switch more registers that it needs to (which would
  * represent a performance issue).  For example, on the IA-32, the test should
  * issue a k_fp_disable() from main(), and then indicate that only x87 FPU
@@ -172,7 +172,7 @@ void load_store_low(void)
 		 * perform any floating point operations!
 		 */
 
-		while ((z_tick_get_32() % 5) != 0) {
+		while ((z_tick_get_32() % 5) != 0U) {
 			/*
 			 * Use a volatile variable to prevent compiler
 			 * optimizing out the spin loop.
@@ -234,7 +234,7 @@ void load_store_low(void)
 		 * k_float_disable() API, and to also continue exercising
 		 * the (exception based) floating enabling mechanism.
 		 */
-		if ((load_store_low_count % 1000) == 0) {
+		if ((load_store_low_count % 1000) == 0U) {
 			k_float_disable(k_current_get());
 		}
 #elif defined(CONFIG_CPU_CORTEX_M4)
@@ -325,7 +325,7 @@ void load_store_high(void)
 
 		/* periodically issue progress report */
 
-		if ((++load_store_high_count % 100) == 0) {
+		if ((++load_store_high_count % 100) == 0U) {
 			PRINT_DATA("Load and store OK after %u (high) "
 				   "+ %u (low) tests\n",
 				   load_store_high_count,

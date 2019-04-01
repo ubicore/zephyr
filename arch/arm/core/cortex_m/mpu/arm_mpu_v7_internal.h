@@ -52,11 +52,11 @@ static int _mpu_partition_is_valid(const struct k_mem_partition *part)
 	 * partition must align with size.
 	 */
 	int partition_is_valid =
-		((part->size & (part->size - 1)) == 0)
+		((part->size & (part->size - 1)) == 0U)
 		&&
 		(part->size >= CONFIG_ARM_MPU_REGION_MIN_ALIGN_AND_SIZE)
 		&&
-		((part->start & (part->size - 1)) == 0);
+		((part->start & (part->size - 1)) == 0U);
 
 	return partition_is_valid;
 }
@@ -72,7 +72,7 @@ static int _mpu_partition_is_valid(const struct k_mem_partition *part)
 static inline u32_t _size_to_mpu_rasr_size(u32_t size)
 {
 	/* The minimal supported region size is 32 bytes */
-	if (size <= 32) {
+	if (size <= 32U) {
 		return REGION_32B;
 	}
 
@@ -107,6 +107,18 @@ static inline void _get_region_attr_from_k_mem_partition_info(
 }
 
 #if defined(CONFIG_USERSPACE)
+
+/**
+ * This internal function returns the minimum HW MPU region index
+ * that may hold the configuration of a dynamic memory region.
+ *
+ * Trivial for ARMv7-M MPU, where dynamic memory areas are programmed
+ * in MPU regions indices right after the static regions.
+ */
+static inline int _get_dyn_region_min_index(void)
+{
+	return static_regions_num;
+}
 
 /**
  * This internal function converts the SIZE field value of MPU_RASR
@@ -245,25 +257,25 @@ static int _mpu_configure_region(const u8_t index,
  * sanity check of the memory regions to be programmed.
  */
 static int _mpu_configure_regions(const struct k_mem_partition
-	regions[], u8_t regions_num, u8_t start_reg_index,
+	*regions[], u8_t regions_num, u8_t start_reg_index,
 	bool do_sanity_check)
 {
 	int i;
-	u8_t reg_index = start_reg_index;
+	int reg_index = start_reg_index;
 
 	for (i = 0; i < regions_num; i++) {
-		if (regions[i].size == 0) {
+		if (regions[i]->size == 0U) {
 			continue;
 		}
 		/* Non-empty region. */
 
 		if (do_sanity_check &&
-				(!_mpu_partition_is_valid(&regions[i]))) {
+				(!_mpu_partition_is_valid(regions[i]))) {
 			LOG_ERR("Partition %u: sanity check failed.", i);
 			return -EINVAL;
 		}
 
-		reg_index = _mpu_configure_region(reg_index, &regions[i]);
+		reg_index = _mpu_configure_region(reg_index, regions[i]);
 
 		if (reg_index == -EINVAL) {
 			return reg_index;
@@ -285,7 +297,7 @@ static int _mpu_configure_regions(const struct k_mem_partition
  * performed, the error signal is propagated to the caller of the function.
  */
 static int _mpu_configure_static_mpu_regions(const struct k_mem_partition
-	static_regions[], const u8_t regions_num,
+	*static_regions[], const u8_t regions_num,
 	const u32_t background_area_base,
 	const u32_t background_area_end)
 {
@@ -314,9 +326,9 @@ static int _mpu_configure_static_mpu_regions(const struct k_mem_partition
  * performed, the error signal is propagated to the caller of the function.
  */
 static int _mpu_configure_dynamic_mpu_regions(const struct k_mem_partition
-		dynamic_regions[], u8_t regions_num)
+	*dynamic_regions[], u8_t regions_num)
 {
-	u32_t mpu_reg_index = static_regions_num;
+	int mpu_reg_index = static_regions_num;
 
 	/* In ARMv7-M architecture the dynamic regions are
 	 * programmed on top of existing SRAM region configuration.

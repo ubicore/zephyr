@@ -221,7 +221,7 @@ static int run_test(struct unit_test *test)
 	 * another test case to be run after the current one finishes, the
 	 * thread_stack will be reused for that new test case while the current
 	 * test case has not finished running yet (it has given the semaphore,
-	 * but has _not_ gone back to _thread_entry() and completed it's "abort
+	 * but has _not_ gone back to z_thread_entry() and completed it's "abort
 	 * phase": this will corrupt the kernel ready queue.
 	 */
 	k_sem_take(&test_end_signal, K_FOREVER);
@@ -301,11 +301,15 @@ void main(void)
 {
 #ifdef CONFIG_USERSPACE
 	struct k_mem_partition *parts[] = {
-		&ztest_mem_partition,
+#ifdef Z_LIBC_PARTITION_EXISTS
 		/* C library globals, stack canary storage, etc */
 		&z_libc_partition,
+#endif
+#ifdef Z_MALLOC_PARTITION_EXISTS
 		/* Required for access to malloc arena */
-		&z_malloc_partition
+		&z_malloc_partition,
+#endif
+		&ztest_mem_partition
 	};
 
 	/* Ztests just have one memory domain with one partition.

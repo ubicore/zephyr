@@ -8,13 +8,11 @@
 
 # vim: ai:ts=4:sw=4
 
-import sys
 import os, fnmatch
 import re
 import yaml
 import argparse
 from collections import defaultdict
-from collections.abc import Mapping
 
 from devicetree import parse_file
 from extract.globals import *
@@ -66,10 +64,10 @@ def generate_prop_defines(node_path, prop):
         # If the binding specifies a parent for the node, then include the
         # parent in the #define's generated for the properties
         parent_path = get_parent_path(node_path)
-        def_label = 'DT_' + get_node_label(parent_path) + '_' \
-                          + get_node_label(node_path)
+        def_label = 'DT_' + node_label(parent_path) + '_' \
+                          + node_label(node_path)
     else:
-        def_label = 'DT_' + get_node_label(node_path)
+        def_label = 'DT_' + node_label(node_path)
 
     names = prop_names(reduced[node_path], prop)
 
@@ -123,10 +121,6 @@ def generate_node_defines(node_path):
         # patterns for things like reg, interrupts, etc that we don't need
         # any special case handling at a node level
         for prop in reduced[node_path]['props']:
-            if prop in {'interrupt-names', 'reg-names', 'phandle',
-                        'linux,phandle'}:
-                continue
-
             if re.fullmatch(yaml_prop, prop):
                 match = True
                 generate_prop_defines(node_path, prop)
@@ -153,7 +147,7 @@ def generate_bus_defines(node_path):
     try:
         parent_binding = get_binding(parent_path)
         parent_bus = parent_binding['child']['bus']
-    except (KeyError, TypeError) as e:
+    except (KeyError, TypeError):
         raise Exception("{0} defines parent {1} as bus master, but {1} is not "
                         "configured as bus master in binding"
                         .format(node_path, parent_path))
@@ -178,7 +172,7 @@ def generate_bus_defines(node_path):
     # Generate *_BUS_NAME #define
     extract_bus_name(
         node_path,
-        'DT_' + get_node_label(parent_path) + '_' + get_node_label(node_path))
+        'DT_' + node_label(parent_path) + '_' + node_label(node_path))
 
 
 def prop_names(node, prop_name):
@@ -206,7 +200,7 @@ def merge_properties(parent, fname, to_dict, from_dict):
     # implement !include. 'parent' is the current parent key being looked at.
     # 'fname' is the top-level .yaml file.
 
-    for k, v in from_dict.items():
+    for k in from_dict:
         if (k in to_dict and isinstance(to_dict[k], dict)
                          and isinstance(from_dict[k], dict)):
             merge_properties(k, fname, to_dict[k], from_dict[k])
@@ -342,7 +336,7 @@ def load_bindings(root, binding_dirs):
     compats = []
 
     # Add '!include foo.yaml' handling
-    yaml.add_constructor('!include', yaml_include)
+    yaml.Loader.add_constructor('!include', yaml_include)
 
     loaded_yamls = set()
 
@@ -371,7 +365,8 @@ def load_bindings(root, binding_dirs):
             compats.append(compat)
 
         with open(file, 'r', encoding='utf-8') as yf:
-            binding = merge_included_bindings(file, yaml.load(yf))
+            binding = merge_included_bindings(file,
+                                              yaml.load(yf, Loader=yaml.Loader))
 
             if 'parent' in binding:
                 bus_to_binding[binding['parent']['bus']][compat] = binding
@@ -383,7 +378,7 @@ def load_bindings(root, binding_dirs):
 
     extract.globals.bindings = compat_to_binding
     extract.globals.bus_bindings = bus_to_binding
-    extract.globals.bindings_compat = compats
+    extract.globals.binding_compats = compats
 
 
 def find_binding_files(binding_dirs):
@@ -395,7 +390,7 @@ def find_binding_files(binding_dirs):
     binding_files = []
 
     for binding_dir in binding_dirs:
-        for root, dirnames, filenames in os.walk(binding_dir):
+        for root, _, filenames in os.walk(binding_dir):
             for filename in fnmatch.filter(filenames, '*.yaml'):
                 binding_files.append(os.path.join(root, filename))
 
@@ -433,7 +428,7 @@ def load_binding_file(fname):
                        "!include statement: {}".format(fname, filepaths))
 
     with open(filepaths[0], 'r', encoding='utf-8') as f:
-        return yaml.load(f)
+        return yaml.load(f, Loader=yaml.Loader)
 
 
 def yaml_inc_error(msg):
@@ -445,7 +440,9 @@ def yaml_inc_error(msg):
 def generate_defines():
     # Generates #defines (and .conf file values) from DTS
 
-    for node_path in reduced.keys():
+    # sorted() otherwise Python < 3.6 randomizes the order of the flash
+    # partition table
+    for node_path in sorted(reduced.keys()):
         generate_node_defines(node_path)
 
     if not defs:
@@ -459,10 +456,8 @@ def generate_defines():
         if k in chosen:
             extract_string_prop(chosen[k], "label", v)
 
-    node_path = chosen.get('zephyr,flash', 'dummy-flash')
-    flash.extract(node_path, 'zephyr,flash', 'DT_FLASH')
-    node_path = chosen.get('zephyr,code-partition', node_path)
-    flash.extract(node_path, 'zephyr,code-partition', None)
+    flash.extract_flash()
+    flash.extract_code_partition()
 
     # Add DT_CHOSEN_<X> defines
     for c in sorted(chosen):

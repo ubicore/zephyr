@@ -187,6 +187,11 @@ if(NOT CONFIG_RTTI)
   )
 endif()
 
+if(CONFIG_MISRA_SANE)
+  zephyr_compile_options($<$<COMPILE_LANGUAGE:C>:-Werror=vla>)
+  zephyr_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Werror=vla>)
+endif()
+
 # @Intent: Obtain compiler specific flags for standard C includes
 toolchain_cc_nostdinc()
 
@@ -307,8 +312,8 @@ if(CONFIG_OVERRIDE_FRAME_POINTER_DEFAULT)
   endif()
 endif()
 
-separate_arguments(CONFIG_COMPILER_OPT_AS_LIST UNIX_COMMAND ${CONFIG_COMPILER_OPT})
-zephyr_compile_options(${CONFIG_COMPILER_OPT_AS_LIST})
+separate_arguments(COMPILER_OPT_AS_LIST UNIX_COMMAND ${CONFIG_COMPILER_OPT})
+zephyr_compile_options(${COMPILER_OPT_AS_LIST})
 
 # TODO: Include arch compiler options at this point.
 
@@ -343,8 +348,6 @@ endif()
 
 zephyr_cc_option_ifdef(CONFIG_STACK_USAGE            -fstack-usage)
 
-zephyr_system_include_directories(${NOSTDINC})
-
 # Force an error when things like SYS_INIT(foo, ...) occur with a missing header.
 zephyr_cc_option(-Werror=implicit-int)
 
@@ -360,7 +363,8 @@ zephyr_cc_option(-Wpointer-arith)
 # Declare MPU userspace dependencies before the linker scripts to make
 # sure the order of dependencies are met
 if(CONFIG_USERSPACE)
-  set(APP_SMEM_DEP app_smem_linker)
+  set(APP_SMEM_ALIGNED_DEP app_smem_aligned_linker)
+  set(APP_SMEM_UNALIGNED_DEP app_smem_unaligned_linker)
   if(CONFIG_ARM)
     set(PRIV_STACK_DEP priv_stacks_prebuilt)
   endif()
@@ -378,6 +382,13 @@ endif()
 zephyr_ld_options(
   ${LINKERFLAGPREFIX},--gc-sections
   ${LINKERFLAGPREFIX},--build-id=none
+  )
+
+# Sort the common symbols and each input section by alignment
+# in descending order to minimize padding between these symbols.
+zephyr_ld_options(
+  ${LINKERFLAGPREFIX},--sort-common=descending
+  ${LINKERFLAGPREFIX},--sort-section=alignment
   )
 
 get_property(TOPT GLOBAL PROPERTY TOPT)
@@ -443,6 +454,8 @@ function(construct_add_custom_command_for_linker_pass linker_output_name output_
 
   if (${linker_output_name} MATCHES "^linker_pass_final$")
     set(linker_pass_define -DLINKER_PASS2)
+  elseif (${linker_output_name} MATCHES "^linker_app_smem_unaligned$")
+    set(linker_pass_define -DLINKER_APP_SMEM_UNALIGNED)
   else()
     set(linker_pass_define "")
   endif()
@@ -562,14 +575,20 @@ add_subdirectory(ext)
 add_subdirectory(subsys)
 add_subdirectory(drivers)
 
-# Add all zephyr modules subdirectories.
-message("Including module(s): ${ZEPHYR_MODULES_NAME}")
-set(index 0)
-foreach(module_name ${ZEPHYR_MODULES_NAME})
-  list(GET ZEPHYR_MODULES_DIR ${index} module_dir)
-  math(EXPR index "${index} + 1")
-  add_subdirectory(${module_dir} ${CMAKE_BINARY_DIR}/${module_name})
-endforeach()
+# Include zephyr modules generated CMake file.
+if(EXISTS ${CMAKE_BINARY_DIR}/zephyr_modules.txt)
+  file(STRINGS ${CMAKE_BINARY_DIR}/zephyr_modules.txt ZEPHYR_MODULES_TXT)
+
+  foreach(module ${ZEPHYR_MODULES_TXT})
+    # Match "<name>":"<path>" for each line of file, each corresponding to
+    # one module. The use of quotes is required due to CMake not supporting
+    # lazy regexes (it supports greedy only).
+    string(REGEX REPLACE "\"(.*)\":\".*\"" "\\1" module_name ${module})
+    string(REGEX REPLACE "\".*\":\"(.*)\"" "\\1" module_path ${module})
+    message("Including module: ${module_name} in path: ${module_path}")
+    add_subdirectory(${module_path} ${CMAKE_BINARY_DIR}/${module_name})
+  endforeach()
+endif()
 
 set(syscall_macros_h ${ZEPHYR_BINARY_DIR}/include/generated/syscall_macros.h)
 
@@ -743,24 +762,6 @@ get_property(ZEPHYR_LIBS_PROPERTY GLOBAL PROPERTY ZEPHYR_LIBS)
 foreach(zephyr_lib ${ZEPHYR_LIBS_PROPERTY})
   # TODO: Could this become an INTERFACE property of zephyr_interface?
   add_dependencies(${zephyr_lib} ${OFFSETS_H_TARGET})
-
-  # Verify that all (non-imported) libraries have source
-  # files. Libraries without source files are not supported because
-  # they are an indication that something has been misconfigured.
-  get_target_property(lib_imported ${zephyr_lib} IMPORTED)
-  get_target_property(lib_sources  ${zephyr_lib} SOURCES)
-  if(lib_sources STREQUAL lib_sources-NOTFOUND
-      AND (NOT (${zephyr_lib} STREQUAL app))
-      AND (NOT lib_imported)
-      )
-    # app is not checked because it's sources are added to it after
-    # this CMakeLists.txt file has been processed
-    message(FATAL_ERROR "\
-The Zephyr library '${zephyr_lib}' was created without source files. \
-Empty (non-imported) libraries are not supported. \
-Either make sure that the library has the sources it should have, \
-or make sure it is not created when it has no source files.")
-  endif()
 endforeach()
 
 get_property(OUTPUT_FORMAT        GLOBAL PROPERTY PROPERTY_OUTPUT_FORMAT)
@@ -774,7 +775,7 @@ construct_add_custom_command_for_linker_pass(
   custom_command
   ${ALIGN_SIZING_DEP}
   ${PRIV_STACK_DEP}
-  ${APP_SMEM_DEP}
+  ${APP_SMEM_ALIGNED_DEP}
   ${CODE_RELOCATION_DEP}
   ${OFFSETS_H_TARGET}
   )
@@ -882,8 +883,6 @@ if(CONFIG_USERSPACE)
 
   get_property(compile_definitions_interface TARGET zephyr_interface
     PROPERTY INTERFACE_COMPILE_DEFINITIONS)
-
-  set(complete_include_dirs ${include_dir_in_interface} ${sys_include_dir_in_interface})
 endif()
 
 
@@ -954,10 +953,9 @@ if(CONFIG_ARM AND CONFIG_USERSPACE)
   set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/${PRIV_STACKS_OUTPUT_SRC}
     PROPERTIES COMPILE_DEFINITIONS "${compile_definitions_interface}")
 
-  # always compile priv_stacks_hash.c at optimization -Os
   set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/${PRIV_STACKS_OUTPUT_SRC}
     PROPERTIES COMPILE_FLAGS
-    "${NO_COVERAGE_FLAGS} -Os -fno-function-sections -fno-data-sections ")
+    "${NO_COVERAGE_FLAGS} -fno-function-sections -fno-data-sections ")
 
   # We need precise control of where generated text/data ends up in the final
   # kernel image. Disable function/data sections and use objcopy to move
@@ -970,8 +968,12 @@ if(CONFIG_ARM AND CONFIG_USERSPACE)
   # NB: Using a library instead of target_compile_options(priv_stacks_output_lib
   # [...]) because a library's options have precedence
   add_library(priv_stacks_output_lib_interface INTERFACE)
-  foreach(incl ${complete_include_dirs})
+  foreach(incl ${include_dir_in_interface})
     target_include_directories(priv_stacks_output_lib_interface INTERFACE ${incl})
+  endforeach()
+
+  foreach(incl ${sys_include_dir_in_interface})
+    target_include_directories(priv_stacks_output_lib_interface SYSTEM INTERFACE ${incl})
   endforeach()
 
   target_link_libraries(priv_stacks_output_lib priv_stacks_output_lib_interface)
@@ -1078,9 +1080,8 @@ if(CONFIG_USERSPACE)
     ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_SRC}
     )
 
-  # always compile kobject_hash.c at optimization -Os
   set_source_files_properties(${OUTPUT_SRC} PROPERTIES COMPILE_FLAGS
-    "${NO_COVERAGE_FLAGS} -Os -fno-function-sections -fno-data-sections")
+    "${NO_COVERAGE_FLAGS} -fno-function-sections -fno-data-sections")
 
   set_source_files_properties(${OUTPUT_SRC}
     PROPERTIES COMPILE_DEFINITIONS "${compile_definitions_interface}")
@@ -1092,10 +1093,13 @@ if(CONFIG_USERSPACE)
 
   target_link_libraries(output_lib output_lib_interface)
 
-  foreach(incl ${complete_include_dirs})
+  foreach(incl ${include_dir_in_interface})
     target_include_directories(output_lib_interface INTERFACE ${incl})
   endforeach()
 
+  foreach(incl ${sys_include_dir_in_interface})
+    target_include_directories(output_lib_interface SYSTEM INTERFACE ${incl})
+  endforeach()
 
   set(OUTPUT_OBJ_PATH ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/output_lib.dir/${OUTPUT_OBJ})
 
@@ -1140,39 +1144,105 @@ zephyr_compile_options(
 )
 
 configure_file(
-     $ENV{ZEPHYR_BASE}/include/arch/arc/v2/app_data_alignment.ld
+     $ENV{ZEPHYR_BASE}/include/arch/common/app_data_alignment.ld
      ${PROJECT_BINARY_DIR}/include/generated/app_data_alignment.ld)
 
 configure_file(
-     $ENV{ZEPHYR_BASE}/include/arch/arm/cortex_m/scripts/app_smem.ld
+     $ENV{ZEPHYR_BASE}/include/linker/app_smem.ld
      ${PROJECT_BINARY_DIR}/include/generated/app_smem.ld)
 
+configure_file(
+     $ENV{ZEPHYR_BASE}/include/linker/app_smem_aligned.ld
+     ${PROJECT_BINARY_DIR}/include/generated/app_smem_aligned.ld)
+
+configure_file(
+     $ENV{ZEPHYR_BASE}/include/linker/app_smem_unaligned.ld
+     ${PROJECT_BINARY_DIR}/include/generated/app_smem_unaligned.ld)
+
 if(CONFIG_USERSPACE)
-  set(APP_SMEM_LD "${PROJECT_BINARY_DIR}/include/generated/app_smem.ld")
+  set(APP_SMEM_ALIGNED_LD "${PROJECT_BINARY_DIR}/include/generated/app_smem_aligned.ld")
+  set(APP_SMEM_UNALIGNED_LD "${PROJECT_BINARY_DIR}/include/generated/app_smem_unaligned.ld")
   set(OBJ_FILE_DIR "${PROJECT_BINARY_DIR}/../")
 
   add_custom_target(
-    ${APP_SMEM_DEP}
+    ${APP_SMEM_ALIGNED_DEP}
     DEPENDS
-    ${APP_SMEM_LD}
+    ${APP_SMEM_ALIGNED_LD}
+    )
+
+  add_custom_target(
+    ${APP_SMEM_UNALIGNED_DEP}
+    DEPENDS
+    ${APP_SMEM_UNALIGNED_LD}
     )
 
   if(CONFIG_NEWLIB_LIBC)
     set(NEWLIB_PART -l libc.a z_libc_partition)
   endif()
+  if(CONFIG_MBEDTLS)
+    set(MBEDTLS_PART -l libext__lib__crypto__mbedtls.a k_mbedtls_partition)
+  endif()
+
   add_custom_command(
-    OUTPUT ${APP_SMEM_LD}
+    OUTPUT ${APP_SMEM_UNALIGNED_LD}
     COMMAND ${PYTHON_EXECUTABLE}
     ${ZEPHYR_BASE}/scripts/gen_app_partitions.py
     -d ${OBJ_FILE_DIR}
-    -o ${APP_SMEM_LD}
-    ${NEWLIB_PART}
+    -o ${APP_SMEM_UNALIGNED_LD}
+    ${NEWLIB_PART} ${MBEDTLS_PART}
     $<$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>:--verbose>
     DEPENDS
     kernel
     ${ZEPHYR_LIBS_PROPERTY}
     WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/
-    COMMENT "Generating app_smem linker section"
+    COMMENT "Generating app_smem_unaligned linker section"
+    )
+
+  construct_add_custom_command_for_linker_pass(
+    linker_app_smem_unaligned
+    custom_command
+    ${ALIGN_SIZING_DEP}
+    ${CODE_RELOCATION_DEP}
+    ${APP_SMEM_UNALIGNED_DEP}
+    ${APP_SMEM_UNALIGNED_LD}
+    ${OFFSETS_H_TARGET}
+    )
+  add_custom_command(
+    ${custom_command}
+    )
+
+  add_custom_target(
+    linker_app_smem_unaligned_script
+    DEPENDS
+    linker_app_smem_unaligned.cmd
+    )
+
+  set_property(TARGET
+    linker_app_smem_unaligned_script
+    PROPERTY INCLUDE_DIRECTORIES
+    ${ZEPHYR_INCLUDE_DIRS}
+    )
+
+  set(APP_SMEM_UNALIGNED_LIB app_smem_unaligned_output_obj_renamed_lib)
+  add_executable(       app_smem_unaligned_prebuilt misc/empty_file.c)
+  target_link_libraries(app_smem_unaligned_prebuilt ${TOPT} ${PROJECT_BINARY_DIR}/linker_app_smem_unaligned.cmd ${zephyr_lnk} ${CODE_RELOCATION_DEP})
+  set_property(TARGET   app_smem_unaligned_prebuilt PROPERTY LINK_DEPENDS ${PROJECT_BINARY_DIR}/linker_app_smem_unaligned.cmd)
+  add_dependencies(     app_smem_unaligned_prebuilt ${ALIGN_SIZING_DEP} linker_app_smem_unaligned_script ${OFFSETS_LIB})
+
+  add_custom_command(
+    OUTPUT ${APP_SMEM_ALIGNED_LD}
+    COMMAND ${PYTHON_EXECUTABLE}
+    ${ZEPHYR_BASE}/scripts/gen_app_partitions.py
+    -e $<TARGET_FILE:app_smem_unaligned_prebuilt>
+    -o ${APP_SMEM_ALIGNED_LD}
+    ${NEWLIB_PART} ${MBEDTLS_PART}
+    $<$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>:--verbose>
+    DEPENDS
+    kernel
+    ${ZEPHYR_LIBS_PROPERTY}
+    app_smem_unaligned_prebuilt
+    WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/
+    COMMENT "Generating app_smem_aligned linker section"
     )
 endif()
 
@@ -1182,8 +1252,8 @@ if(CONFIG_USERSPACE AND CONFIG_ARM)
     custom_command
     ${ALIGN_SIZING_DEP}
     ${CODE_RELOCATION_DEP}
-    ${APP_SMEM_DEP}
-    ${APP_SMEM_LD}
+    ${APP_SMEM_ALIGNED_DEP}
+    ${APP_SMEM_ALIGNED_LD}
     ${OFFSETS_H_TARGET}
     )
   add_custom_command(

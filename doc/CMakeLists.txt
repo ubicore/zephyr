@@ -1,11 +1,23 @@
 cmake_minimum_required(VERSION 3.13.1)
 project(Zephyr-Kernel-Doc LANGUAGES)
 
+# Find west to (optionally) process modules for Kconfig
+find_program(
+  WEST
+  west
+  )
+if(${WEST} STREQUAL WEST-NOTFOUND)
+  unset(WEST)
+endif()
+
 set(ZEPHYR_BASE $ENV{ZEPHYR_BASE})
 
 message(STATUS "Zephyr base: ${ZEPHYR_BASE}")
 
 include(${ZEPHYR_BASE}/cmake/version.cmake)
+
+# Process modules
+include(${ZEPHYR_BASE}/cmake/zephyr_module.cmake)
 
 find_package(PythonInterp 3.4)
 set(DOXYGEN_SKIP_DOT True)
@@ -74,7 +86,6 @@ set(DOC_WARN ${CMAKE_CURRENT_BINARY_DIR}/doc.warnings)
 set(CONTENT_OUTPUTS ${CMAKE_CURRENT_BINARY_DIR}/extracted-content.txt)
 
 configure_file(${DOXYFILE_IN} ${DOXYFILE_OUT} @ONLY)
-file(TOUCH ${CMAKE_CURRENT_BINARY_DIR}/Kconfig.modules)
 
 # This command is used to copy all documentation source files from the
 # ZEPHYR_BASE/ environment variable into the build directory,
@@ -181,7 +192,8 @@ add_custom_target(
   ARCH_DIR=arch/
   SOC_DIR=soc/
   SRCARCH=x86
-  PROJECT_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+  CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR}
+  KCONFIG_WARN_UNDEF=y
   KCONFIG_TURBO_MODE=${KCONFIG_TURBO_MODE}
   KCONFIG_DOC_MODE=1
   ${PYTHON_EXECUTABLE} scripts/genrest.py Kconfig ${RST_OUT}/doc/reference/kconfig/
@@ -191,7 +203,7 @@ add_custom_target(
 
 set(KI_SCRIPT ${ZEPHYR_BASE}/scripts/filter-known-issues.py)
 set(FIX_TEX_SCRIPT ${ZEPHYR_BASE}/doc/scripts/fix_tex.py)
-set(CONFIG_DIR ${ZEPHYR_BASE}/.known-issues/doc)
+set(CONF_DIR ${ZEPHYR_BASE}/.known-issues/doc)
 
 #
 # HTML section
@@ -225,7 +237,7 @@ add_custom_target(
   COMMAND ${SPHINX_BUILD_HTML_COMMAND}
   # Merge the Doxygen and Sphinx logs into a single file
   COMMAND ${CMAKE_COMMAND} -P ${ZEPHYR_BASE}/cmake/util/fmerge.cmake ${DOC_LOG} ${DOXY_LOG} ${SPHINX_LOG}
-  COMMAND ${PYTHON_EXECUTABLE} ${KI_SCRIPT} --config-dir ${CONFIG_DIR} --errors ${DOC_WARN} --warnings ${DOC_WARN} ${DOC_LOG}
+  COMMAND ${PYTHON_EXECUTABLE} ${KI_SCRIPT} --config-dir ${CONF_DIR} --errors ${DOC_WARN} --warnings ${DOC_WARN} ${DOC_LOG}
   WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
   COMMENT "Generating HTML documentation with ${SPHINXBUILD} ${SPHINXOPTS}"
   ${SPHINX_USES_TERMINAL}
@@ -254,7 +266,7 @@ add_custom_command(
   COMMAND ${SPHINX_BUILD_LATEX_COMMAND}
   # Merge the Doxygen and Sphinx logs into a single file
   COMMAND ${CMAKE_COMMAND} -P ${ZEPHYR_BASE}/cmake/util/fmerge.cmake ${DOC_LOG} ${DOXY_LOG} ${SPHINX_LOG}
-  COMMAND ${PYTHON_EXECUTABLE} ${KI_SCRIPT} --config-dir ${CONFIG_DIR} --errors ${DOC_WARN} --warnings ${DOC_WARN} ${DOC_LOG}
+  COMMAND ${PYTHON_EXECUTABLE} ${KI_SCRIPT} --config-dir ${CONF_DIR} --errors ${DOC_WARN} --warnings ${DOC_WARN} ${DOC_LOG}
   COMMAND ${PYTHON_EXECUTABLE} ${FIX_TEX_SCRIPT} ${SPHINX_OUTPUT_DIR_LATEX}/zephyr.tex
   WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
   COMMENT "Generating LaTeX documentation"

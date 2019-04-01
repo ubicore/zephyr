@@ -52,11 +52,13 @@ extern "C" {
 #define AF_PACKET       PF_PACKET  /**< Packet family.                */
 #define AF_CAN          PF_CAN     /**< Controller Area Network.      */
 
-/** Protocol numbers from IANA */
+/** Protocol numbers from IANA/BSD */
 enum net_ip_protocol {
+	IPPROTO_IP = 0,            /**< IP protocol (pseudo-val for setsockopt() */
 	IPPROTO_ICMP = 1,          /**< ICMP protocol   */
 	IPPROTO_TCP = 6,           /**< TCP protocol    */
 	IPPROTO_UDP = 17,          /**< UDP protocol    */
+	IPPROTO_IPV6 = 41,         /**< IPv6 protocol   */
 	IPPROTO_ICMPV6 = 58,       /**< ICMPv6 protocol */
 };
 
@@ -561,7 +563,7 @@ static inline bool net_ipv6_is_prefix(const u8_t *addr1,
 				      u8_t length)
 {
 	u8_t bits = 128 - length;
-	u8_t bytes = length / 8;
+	u8_t bytes = length / 8U;
 	u8_t remain = bits % 8;
 	u8_t mask;
 
@@ -595,7 +597,7 @@ static inline bool net_ipv6_is_prefix(const u8_t *addr1,
  */
 static inline bool net_ipv4_is_addr_loopback(struct in_addr *addr)
 {
-	return addr->s4_addr[0] == 127;
+	return addr->s4_addr[0] == 127U;
 }
 
 /**
@@ -911,7 +913,7 @@ void net_ipv6_addr_create_solicited_node(const struct in6_addr *src,
 	UNALIGNED_PUT(0, &dst->s6_addr16[2]);
 	UNALIGNED_PUT(0, &dst->s6_addr16[3]);
 	UNALIGNED_PUT(0, &dst->s6_addr16[4]);
-	dst->s6_addr[10]  = 0;
+	dst->s6_addr[10]  = 0U;
 	dst->s6_addr[11]  = 0x01;
 	dst->s6_addr[12]  = 0xFF;
 	dst->s6_addr[13]  = src->s6_addr[13];
@@ -979,7 +981,7 @@ static inline void net_ipv6_addr_create_iid(struct in6_addr *addr,
 			UNALIGNED_PUT(0, &addr->s6_addr32[2]);
 			addr->s6_addr[11] = 0xff;
 			addr->s6_addr[12] = 0xfe;
-			addr->s6_addr[13] = 0;
+			addr->s6_addr[13] = 0U;
 			addr->s6_addr[14] = lladdr->addr[0];
 			addr->s6_addr[15] = lladdr->addr[1];
 		}
@@ -1030,9 +1032,9 @@ static inline bool net_ipv6_addr_based_on_ll(const struct in6_addr *addr,
 	switch (lladdr->len) {
 	case 2:
 		if (!memcmp(&addr->s6_addr[14], lladdr->addr, lladdr->len) &&
-		    addr->s6_addr[8]  == 0 &&
-		    addr->s6_addr[9]  == 0 &&
-		    addr->s6_addr[10] == 0 &&
+		    addr->s6_addr[8]  == 0U &&
+		    addr->s6_addr[9]  == 0U &&
+		    addr->s6_addr[10] == 0U &&
 		    addr->s6_addr[11] == 0xff &&
 		    addr->s6_addr[12] == 0xfe) {
 			return true;

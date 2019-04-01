@@ -85,10 +85,7 @@ static inline int socket_can_setsockopt(struct device *dev, void *obj,
 		return -1;
 	}
 
-	if (optlen != sizeof(struct can_filter)) {
-		errno = EINVAL;
-		return -1;
-	}
+	__ASSERT_NO_MSG(optlen == sizeof(struct zcan_filter));
 
 	ret = can_attach_msgq(socket_context->can_dev, socket_context->msgq,
 			      optval);
@@ -131,7 +128,7 @@ static inline void rx_thread(void *ctx, void *unused1, void *unused2)
 			continue;
 		}
 
-		if (net_pkt_write_new(pkt, (void *)&msg, sizeof(msg))) {
+		if (net_pkt_write(pkt, (void *)&msg, sizeof(msg))) {
 			LOG_ERR("Failed to append RX data");
 			net_pkt_unref(pkt);
 			continue;

@@ -130,7 +130,7 @@ subdirectories which are not described here.
 :file:`ext`
     Externally created code that has been integrated into Zephyr
     from other sources and that must live inside the zephyr repository unlike
-    `external projects <ext-projs>`_
+    `external projects <ext-projs_>`_
 
 :file:`include`
     Include files for all public APIs, except those defined under :file:`lib`.
@@ -302,8 +302,8 @@ into a single application image that can be run on simulated hardware or real
 hardware.
 
 As described in :ref:`getting_started_cmake`, on Linux and macOS you can choose
-between the `make` and `ninja` generators, whereas on Windows you need to use
-`ninja`. For simplicity we will use `ninja` throughout this guide.
+between the ``make`` and ``ninja`` generators, whereas on Windows you need to use
+``ninja``. For simplicity we will use ``ninja`` throughout this guide.
 
 Basics
 ======
@@ -428,6 +428,8 @@ Run an Application
 
 An application image can be run on a real board or emulated hardware.
 
+.. _application_run_board:
+
 Running on a Board
 ==================
 
@@ -466,6 +468,7 @@ for additional information on how to flash your board.
           consult your board's documentation to see if this is
           necessary.
 
+.. _application_run_qemu:
 
 Running in an Emulator
 ======================
@@ -673,11 +676,11 @@ if the project contains the metadata required in a module.  If the project is
 identified to be a module then CMake will include it in the build.
 
 .. note::
-   Although the build system currently uses :ref:`west` to list the available
+   Although the build system normally uses :ref:`west` to list the available
    external projects for potential inclusion in the build, it is perfectly
-   possible to use any other script or tool instead by modifying the CMake
-   script. A future addition will make this possible even without any
-   modifications to the build scripts.
+   possible to use any other script or tool. By calling cmake as
+   ``cmake --DZEPHYR_MODULES=<oot-path-to-module>[;<additional-oot-module(s)>]``
+   , it will search in those paths instead of invoking ``west list``
 
 The code in :file:`CMakeLists.txt` retrieves the following information for
 each project using ``west list``:
@@ -1163,15 +1166,15 @@ file.
    the configuration files specified in it are merged and used as the
    application-specific settings.
 
-   Alternatively, an application may define a CMake command, macro, or function
-   called ``set_conf_file``, which is invoked and is expected to set
-   :makevar:`CONF_FILE`.
-
 2. Otherwise (if (1.) does not apply), if a file :file:`prj_BOARD.conf` exists
    in the application directory, where :makevar:`BOARD` is the BOARD value set
    earlier, the settings in it are used.
 
-3. Otherwise, if a file :file:`prj.conf` exists in the application directory,
+3. Otherwise (if (2.) does not apply), if a file :file:`boards/BOARD.conf` exists
+   in the application directory, where :makevar:`BOARD` is the BOARD value set
+   earlier, the settings in it are merged with :file:`prj.conf` and used.
+
+4. Otherwise, if a file :file:`prj.conf` exists in the application directory,
    the settings in it are used.
 
 Configuration settings that have not been specified fall back on their
@@ -1469,7 +1472,7 @@ be useful for glue code to have access to Zephyr kernel header files.
 To make it easier to integrate third-party components, the Zephyr
 build system has defined CMake functions that give application build
 scripts access to the zephyr compiler options. The functions are
-documented and defined in :file:`$ZEPHYR_BASE/cmake/extensions.cmake`
+documented and defined in :zephyr_file:`cmake/extensions.cmake`
 and follow the naming convention ``zephyr_get_<type>_<format>``.
 
 The following variables will often need to be exported to the
@@ -1480,7 +1483,7 @@ third-party build system.
 * ``ARCH`` and ``BOARD``, together with several variables that identify the
   Zephyr kernel version.
 
-:file:`samples/application_development/external_lib` is a sample
+:zephyr_file:`samples/application_development/external_lib` is a sample
 project that demonstrates some of these features.
 
 .. _Eclipse IDE for C/C++ Developers: https://www.eclipse.org/downloads/packages/eclipse-ide-cc-developers/oxygen2

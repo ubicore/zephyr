@@ -23,6 +23,7 @@ choice BT_LL_CHOICE
 config BT_LL_SW
 	bool "Software-based BLE Link Layer"
 	select BT_RECV_IS_RX_THREAD
+	select BT_HAS_HCI_VS
 	select ENTROPY_GENERATOR
 	select ENTROPY_NRF5_RNG if SOC_COMPATIBLE_NRF
 	select ENTROPY_NRF5_BIAS_CORRECTION if SOC_COMPATIBLE_NRF
@@ -291,14 +292,13 @@ config BT_CTLR_DATA_LENGTH
 	# Update procedure in the Controller.
 	bool
 	depends on BT_DATA_LEN_UPDATE
-	default y if SOC_COMPATIBLE_NRF52X
+	default y if SOC_COMPATIBLE_NRF52X || BT_CTLR_DATA_LENGTH_CLEAR
 
 config BT_CTLR_DATA_LENGTH_MAX
 	int "Maximum data length supported"
 	depends on BT_CTLR_DATA_LENGTH
 	default 27
-	range 27 251 if SOC_COMPATIBLE_NRF52X || BT_CTLR_DATA_LENGTH_CLEAR
-	range 27 27
+	range 27 251
 	help
 	  Set the maximum data length of PDU supported in the Controller.
 
@@ -308,7 +308,7 @@ config BT_CTLR_PHY
 	bool
 	depends on BT_PHY_UPDATE
 	select BT_CTLR_EXT_REJ_IND
-	default y if SOC_COMPATIBLE_NRF52X
+	default y if SOC_COMPATIBLE_NRF52X || BT_CTLR_PHY_2M_NRF
 
 endif # BT_CONN
 
@@ -369,21 +369,13 @@ config BT_CTLR_FILTER
 
 config BT_CTLR_DATA_LENGTH_CLEAR
 	bool "Data Length Support (Cleartext only)"
-	depends on BT_CTLR_DATA_LENGTH && SOC_SERIES_NRF51X
+	depends on SOC_SERIES_NRF51X
 	help
 	  Enable support for Bluetooth v4.2 LE Data Length Update procedure, up to
 	  251 byte cleartext payloads in the Controller. Encrypted connections
 	  are not supported.
 
-if BT_CTLR_PHY
-
-config BT_CTLR_PHY_2M
-	bool "2Mbps PHY Support"
-	depends on !SOC_SERIES_NRF51X || BT_CTLR_PHY_2M_NRF
-	default y
-	help
-	  Enable support for Bluetooth 5.0 2Mbps PHY in the Controller.
-
+if BT_PHY_UPDATE
 config BT_CTLR_PHY_2M_NRF
 	bool "2Mbps Nordic Semiconductor PHY Support (Cleartext only)"
 	depends on SOC_SERIES_NRF51X
@@ -392,7 +384,12 @@ config BT_CTLR_PHY_2M_NRF
 	  Enable support for Nordic Semiconductor proprietary 2Mbps PHY in the
 	  Controller. Encrypted connections are not supported.
 
-endif # BT_CTLR_PHY
+config BT_CTLR_PHY_2M
+	bool "2Mbps PHY Support"
+	depends on !SOC_SERIES_NRF51X || BT_CTLR_PHY_2M_NRF
+	default y
+	help
+	  Enable support for Bluetooth 5.0 2Mbps PHY in the Controller.
 
 config BT_CTLR_PHY_CODED
 	bool "Coded PHY Support"
@@ -400,6 +397,7 @@ config BT_CTLR_PHY_CODED
 	default y
 	help
 	  Enable support for Bluetooth 5.0 Coded PHY in the Controller.
+endif # BT_PHY_UPDATE
 
 if BT_LL_SW
 
@@ -507,10 +505,10 @@ config BT_CTLR_LOWEST_PRIO
 	  The interrupt priority for RNG and other non-critical functions.
 
 config BT_CTLR_LOW_LAT
-	bool "Low latency non-negotiating event pre-emption"
+	bool "Low latency non-negotiating event preemption"
 	default y if SOC_SERIES_NRF51X
 	help
-	  Use low latency non-negotiating event pre-emption. This reduces
+	  Use low latency non-negotiating event preemption. This reduces
 	  Radio ISR latencies by the controller event scheduling framework.
 	  Consequently, this reduces on-air radio utilization due to redundant
 	  radio state switches.

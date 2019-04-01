@@ -3,6 +3,10 @@
 Networking with QEMU Ethernet
 #############################
 
+.. contents::
+    :local:
+    :depth: 2
+
 This page describes how to set up a virtual network between a (Linux) host
 and a Zephyr application running in QEMU.
 
@@ -74,5 +78,6 @@ In terminal #2, type:
    :zephyr-app: samples/net/sockets/echo_server
    :host-os: unix
    :board: qemu_x86
+   :gen-args: -DOVERLAY_CONFIG=overlay-e1000.conf
    :goals: run
    :compact:

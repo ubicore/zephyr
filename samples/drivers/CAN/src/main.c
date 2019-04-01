@@ -56,7 +56,7 @@ void send_string(char *string, struct device *can_dev)
 
 	msg.ext_id = STR_MSG_ID;
 	msg.id_type = CAN_EXTENDED_IDENTIFIER;
-	msg.dlc = 0;
+	msg.dlc = 0U;
 	msg.rtr = CAN_DATAFRAME;
 
 	for (str_len = strlen(string); str_len; ) {
@@ -78,16 +78,16 @@ void tx_thread(void *can_dev_param, void *unused2, void *unused3)
 
 	msg.std_id = LED_MSG_ID;
 	msg.id_type = CAN_STANDARD_IDENTIFIER;
-	msg.dlc = 1;
+	msg.dlc = 1U;
 	msg.rtr = CAN_DATAFRAME;
-	msg.data[0] = 0;
+	msg.data[0] = 0U;
 
 	msg_button_cnt.std_id = BUTTON_MSG_ID;
 	msg_button_cnt.id_type = CAN_STANDARD_IDENTIFIER;
-	msg_button_cnt.dlc = 2;
+	msg_button_cnt.dlc = 2U;
 	msg_button_cnt.rtr = CAN_DATAFRAME;
-	msg_button_cnt.data[0] = 0;
-	msg_button_cnt.data[1] = 0;
+	msg_button_cnt.data[0] = 0U;
+	msg_button_cnt.data[1] = 0U;
 
 	printk("TX thread is running.\n");
 	while (1) {
@@ -156,7 +156,7 @@ void led_thread(void *msgq, void *can_dev_param, void *gpio_dev_param)
 	while (1) {
 		k_msgq_get((struct k_msgq *)msgq, &msg, K_FOREVER);
 
-		if (msg.dlc != 1) {
+		if (msg.dlc != 1U) {
 			continue;
 		}
 
@@ -235,7 +235,11 @@ void main(void)
 		printk("Error enabling callback!\n");
 	}
 
-	can_attach_isr(can_dev, rx_button_isr, &filter);
+	ret = can_attach_isr(can_dev, rx_button_isr, &filter);
+	if (ret == CAN_NO_FREE_FILTER) {
+		printk("Error, no filter available!\n");
+		return;
+	}
 
 	k_tid_t tx_tid = k_thread_create(&tx_thread_data, tx_thread_stack,
 					 K_THREAD_STACK_SIZEOF(tx_thread_stack),

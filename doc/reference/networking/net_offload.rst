@@ -1,5 +1,12 @@
 .. _net_offload_interface:
 
+Network Traffic Offloading
+==========================
+
+.. contents::
+    :local:
+    :depth: 2
+
 Network Offloading
 ##################
 
@@ -16,6 +23,8 @@ API Reference
 
 .. doxygengroup:: net_offload
    :project: Zephyr
+
+.. _net_socket_offloading:
 
 Socket Offloading
 #################

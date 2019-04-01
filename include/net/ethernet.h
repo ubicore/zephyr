@@ -19,7 +19,11 @@
 
 #include <net/net_ip.h>
 #include <net/net_pkt.h>
+
+#if defined(CONFIG_NET_LLDP)
 #include <net/lldp.h>
+#endif
+
 #include <misc/util.h>
 #include <net/net_if.h>
 #include <net/ethernet_vlan.h>
@@ -68,6 +72,8 @@ struct net_eth_addr {
 #endif
 
 #define NET_ETH_MINIMAL_FRAME_SIZE	60
+#define NET_ETH_MTU			1500
+#define NET_ETH_MAX_FRAME_SIZE	(NET_ETH_MTU + sizeof(struct net_eth_hdr))
 
 /** @endcond */
 
@@ -283,8 +289,14 @@ struct ethernet_lldp {
 	/** Used for track timers */
 	sys_snode_t node;
 
-	/** LLDP information element related to this network interface. */
+	/** LLDP Data Unit mandatory TLVs for the interface. */
 	const struct net_lldpdu *lldpdu;
+
+	/** LLDP Data Unit optional TLVs for the interface */
+	const u8_t *optional_du;
+
+	/** Length of the optional Data Unit TLVs */
+	size_t optional_len;
 
 	/** Network interface that has LLDP supported. */
 	struct net_if *iface;
@@ -389,6 +401,20 @@ static inline bool net_eth_is_addr_broadcast(struct net_eth_addr *addr)
 	    addr->addr[3] == 0xff &&
 	    addr->addr[4] == 0xff &&
 	    addr->addr[5] == 0xff) {
+		return true;
+	}
+
+	return false;
+}
+
+static inline bool net_eth_is_addr_unspecified(struct net_eth_addr *addr)
+{
+	if (addr->addr[0] == 0x00 &&
+	    addr->addr[1] == 0x00 &&
+	    addr->addr[2] == 0x00 &&
+	    addr->addr[3] == 0x00 &&
+	    addr->addr[4] == 0x00 &&
+	    addr->addr[5] == 0x00) {
 		return true;
 	}
 
@@ -669,43 +695,6 @@ static inline int net_eth_get_ptp_port(struct net_if *iface)
 #if defined(CONFIG_NET_GPTP)
 void net_eth_set_ptp_port(struct net_if *iface, int port);
 #endif /* CONFIG_NET_GPTP */
-
-struct net_lldpdu;
-
-/**
- * @brief Set LLDP protocol data unit (LLDPDU) for the network interface.
- *
- * @param iface Network interface
- * @param lldpdu LLDPDU pointer
- *
- * @return <0 if error, index in lldp array if iface is found there
- */
-#if defined(CONFIG_NET_LLDP)
-int net_eth_set_lldpdu(struct net_if *iface, const struct net_lldpdu *lldpdu);
-#else
-static inline int net_eth_set_lldpdu(struct net_if *iface,
-				     const struct net_lldpdu *lldpdu)
-{
-	ARG_UNUSED(iface);
-	ARG_UNUSED(lldpdu);
-
-	return -ENOTSUP;
-}
-#endif
-
-/**
- * @brief Unset LLDP protocol data unit (LLDPDU) for the network interface.
- *
- * @param iface Network interface
- */
-#if defined(CONFIG_NET_LLDP)
-void net_eth_unset_lldpdu(struct net_if *iface);
-#else
-static inline void net_eth_unset_lldpdu(struct net_if *iface)
-{
-	ARG_UNUSED(iface);
-}
-#endif
 
 #ifdef __cplusplus
 }

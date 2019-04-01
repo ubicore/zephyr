@@ -4,6 +4,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+"""
+Script to generate gperf tables mapping threads to their privileged mode stacks
+
+Some MPU devices require that memory region definitions be aligned to their
+own size, which must be a power of two. This introduces difficulties in
+reserving memory for the thread's supervisor mode stack inline with the
+K_THREAD_STACK_DEFINE() macro.
+
+Instead, the stack used when a user thread elevates privileges is allocated
+elsewhere in memory, and a gperf table is created to be able to quickly
+determine where the supervisor mode stack is in memory. This is accomplished
+by scanning the DWARF debug information in zephyr_prebuilt.elf, identifying
+instances of 'struct k_thread', and emitting a gperf configuration file which
+allocates memory for each thread's privileged stack and creates the table
+mapping thread addresses to these stacks.
+"""
+
 import sys
 import argparse
 import struct
@@ -56,20 +73,20 @@ u8_t *_k_priv_stack_find(void *obj)
 """
 
 
-def write_gperf_table(fp, eh, objs, static_begin, static_end):
+def write_gperf_table(fp, eh, objs):
     fp.write(header)
 
     # priv stack declarations
     fp.write("%{\n")
     fp.write(includes)
-    for obj_addr, ko in objs.items():
+    for obj_addr in objs:
         fp.write(priv_stack_decl_temp % (obj_addr))
     fp.write("%}\n")
 
     # structure declaration
     fp.write(structure)
 
-    for obj_addr, ko in objs.items():
+    for obj_addr in objs:
         byte_str = struct.pack("<I" if eh.little_endian else ">I", obj_addr)
         fp.write("\"")
         for byte in byte_str:
@@ -105,6 +122,9 @@ def main():
     syms = eh.get_symbols()
     max_threads = syms["CONFIG_MAX_THREAD_BYTES"] * 8
     objs = eh.find_kobjects(syms)
+    if not objs:
+        sys.stderr.write("WARNING: zero kobject found in %s\n"
+                         % args.kernel)
 
     thread_counter = eh.get_thread_counter()
     if thread_counter > max_threads:
@@ -114,8 +134,7 @@ def main():
         sys.exit(1)
 
     with open(args.output, "w") as fp:
-        write_gperf_table(fp, eh, objs, syms["_static_kernel_objects_begin"],
-                          syms["_static_kernel_objects_end"])
+        write_gperf_table(fp, eh, objs)
 
 
 if __name__ == "__main__":

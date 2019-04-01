@@ -10,7 +10,6 @@ if SOC_FAMILY_STM32
 
 menuconfig CLOCK_CONTROL_STM32_CUBE
 	bool "STM32 Reset & Clock Control"
-	depends on CLOCK_CONTROL
 	select USE_STM32_LL_UTILS
 	help
 	  Enable driver for Reset & Clock Control subsystem found
@@ -382,8 +381,8 @@ endif # SOC_SERIES_STM32L4X
 
 config CLOCK_STM32_AHB_PRESCALER
 	int "AHB prescaler"
-	default 0
-	range 0 512
+	default 1
+	range 1 512
 	help
 	  AHB prescaler, allowed values: 1, 2, 4, 8, 16, 64, 128,
 	  256, 512.

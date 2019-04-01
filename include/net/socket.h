@@ -25,27 +25,18 @@
 #include <zephyr/types.h>
 #include <net/net_ip.h>
 #include <net/dns_resolve.h>
+#include <net/socket_select.h>
 #include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct zsock_timeval {
-	/* Using longs, as many (?) implementations seem to use it. */
-	long tv_sec;
-	long tv_usec;
-};
-
 struct zsock_pollfd {
 	int fd;
 	short events;
 	short revents;
 };
-
-typedef struct zsock_fd_set {
-	u32_t bitset[(CONFIG_POSIX_MAX_FDS + 31) / 32];
-} zsock_fd_set;
 
 /* Values are compatible with Linux */
 #define ZSOCK_POLLIN 1
@@ -174,19 +165,6 @@ __syscall int zsock_fcntl(int sock, int cmd, int flags);
 
 __syscall int zsock_poll(struct zsock_pollfd *fds, int nfds, int timeout);
 
-/* select() API is inefficient, and implemented as inefficient wrapper on
- * top of poll(). Avoid select(), use poll directly().
- */
-int zsock_select(int nfds, zsock_fd_set *readfds, zsock_fd_set *writefds,
-		 zsock_fd_set *exceptfds, struct zsock_timeval *timeout);
-
-#define ZSOCK_FD_SETSIZE (sizeof(((zsock_fd_set *)0)->bitset) * 8)
-
-void ZSOCK_FD_ZERO(zsock_fd_set *set);
-int ZSOCK_FD_ISSET(int fd, zsock_fd_set *set);
-void ZSOCK_FD_CLR(int fd, zsock_fd_set *set);
-void ZSOCK_FD_SET(int fd, zsock_fd_set *set);
-
 int zsock_getsockopt(int sock, int level, int optname,
 		     void *optval, socklen_t *optlen);
 
@@ -208,6 +186,23 @@ __syscall int z_zsock_getaddrinfo_internal(const char *host,
 					   const struct zsock_addrinfo *hints,
 					   struct zsock_addrinfo *res);
 
+/* Flags for getaddrinfo() hints. */
+
+/** Address for bind() (vs for connect()) */
+#define AI_PASSIVE 0x1
+/** Fill in ai_canonname */
+#define AI_CANONNAME 0x2
+/** Assume host address is in numeric notation, don't DNS lookup */
+#define AI_NUMERICHOST 0x4
+/** May return IPv4 mapped address for IPv6  */
+#define AI_V4MAPPED 0x8
+/** May return both native IPv6 and mapped IPv4 address for IPv6 */
+#define AI_ALL 0x10
+/** IPv4/IPv6 support depends on local system config */
+#define AI_ADDRCONFIG 0x20
+/** Assume service (port) is numeric */
+#define AI_NUMERICSERV 0x400
+
 int zsock_getaddrinfo(const char *host, const char *service,
 		      const struct zsock_addrinfo *hints,
 		      struct zsock_addrinfo **res);
@@ -216,6 +211,8 @@ static inline void zsock_freeaddrinfo(struct zsock_addrinfo *ai)
 {
 	free(ai);
 }
+
+const char *zsock_gai_strerror(int errcode);
 
 #define NI_NUMERICHOST 1
 #define NI_NUMERICSERV 2
@@ -230,9 +227,6 @@ int zsock_getnameinfo(const struct sockaddr *addr, socklen_t addrlen,
 #if defined(CONFIG_NET_SOCKETS_POSIX_NAMES)
 
 #define pollfd zsock_pollfd
-#define fd_set zsock_fd_set
-#define timeval zsock_timeval
-#define FD_SETSIZE ZSOCK_FD_SETSIZE
 
 #if !defined(CONFIG_NET_SOCKETS_OFFLOAD)
 static inline int socket(int family, int type, int proto)
@@ -302,33 +296,6 @@ static inline int poll(struct zsock_pollfd *fds, int nfds, int timeout)
 	return zsock_poll(fds, nfds, timeout);
 }
 
-static inline int select(int nfds, zsock_fd_set *readfds,
-			 zsock_fd_set *writefds, zsock_fd_set *exceptfds,
-			 struct timeval *timeout)
-{
-	return zsock_select(nfds, readfds, writefds, exceptfds, timeout);
-}
-
-static inline void FD_ZERO(zsock_fd_set *set)
-{
-	ZSOCK_FD_ZERO(set);
-}
-
-static inline int FD_ISSET(int fd, zsock_fd_set *set)
-{
-	return ZSOCK_FD_ISSET(fd, set);
-}
-
-static inline void FD_CLR(int fd, zsock_fd_set *set)
-{
-	ZSOCK_FD_CLR(fd, set);
-}
-
-static inline void FD_SET(int fd, zsock_fd_set *set)
-{
-	ZSOCK_FD_SET(fd, set);
-}
-
 static inline int getsockopt(int sock, int level, int optname,
 			     void *optval, socklen_t *optlen)
 {
@@ -351,6 +318,11 @@ static inline int getaddrinfo(const char *host, const char *service,
 static inline void freeaddrinfo(struct zsock_addrinfo *ai)
 {
 	zsock_freeaddrinfo(ai);
+}
+
+static inline const char *gai_strerror(int errcode)
+{
+	return zsock_gai_strerror(errcode);
 }
 
 static inline int getnameinfo(const struct sockaddr *addr, socklen_t addrlen,
@@ -432,6 +404,18 @@ static inline char *inet_ntop(sa_family_t family, const void *src, char *dst,
 #define EAI_SYSTEM DNS_EAI_SYSTEM
 #define EAI_SERVICE DNS_EAI_SERVICE
 #endif /* defined(CONFIG_NET_SOCKETS_POSIX_NAMES) */
+
+#define SOL_SOCKET 1
+
+/* Socket options for SOL_SOCKET level */
+#define SO_REUSEADDR 2
+#define SO_ERROR 4
+
+/* Socket options for IPPROTO_TCP level */
+#define TCP_NODELAY 1
+
+/* Socket options for IPPROTO_IPV6 level */
+#define IPV6_V6ONLY 26
 
 #ifdef __cplusplus
 }

@@ -46,11 +46,6 @@ void test_timers(void)
 	printf("tsc %d apic %d\n", tsc1 - tsc0, apic0 - apic1);
 }
 
-unsigned int _init_cpu_stack(int cpu)
-{
-	return (long)alloc_page(0) + 4096;
-}
-
 void handler_timer(void *arg, int err)
 {
 	printf("Timer expired on CPU%d\n", (int)(long)xuk_get_f_ptr());
@@ -155,10 +150,11 @@ void _cpu_start(int cpu)
 	 * "timer" API
 	 */
 	xuk_set_isr(INT_APIC_LVT_TIMER, 10, handler_timer, 0);
-	_apic.INIT_COUNT = 5000000;
+	_apic.INIT_COUNT = 5000000U;
 	test_timers();
 
 	if (cpu == 0) {
+		xuk_start_cpu(1, (long)alloc_page(0) + 4096);
 		xuk_set_isr(0x1f3, 0, (void *)handler_f3, (void *)0x12345678);
 	}
 
