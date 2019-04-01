@@ -57,7 +57,7 @@ static bool data_cb(struct bt_data *data, void *user_data)
 	switch (data->type) {
 	case BT_DATA_NAME_SHORTENED:
 	case BT_DATA_NAME_COMPLETE:
-		memcpy(name, data->data, min(data->data_len, NAME_LEN - 1));
+		memcpy(name, data->data, MIN(data->data_len, NAME_LEN - 1));
 		return false;
 	default:
 		return true;
@@ -1332,7 +1332,7 @@ static int cmd_auth_passkey(const struct shell *shell,
 #define HELP_NONE "[none]"
 #define HELP_ADDR_LE "<address: XX:XX:XX:XX:XX:XX> <type: (public|random)>"
 
-SHELL_CREATE_STATIC_SUBCMD_SET(bt_cmds) {
+SHELL_STATIC_SUBCMD_SET_CREATE(bt_cmds,
 	SHELL_CMD_ARG(init, NULL, HELP_ADDR_LE, cmd_init, 1, 0),
 #if defined(CONFIG_BT_HCI)
 	SHELL_CMD_ARG(hci-cmd, NULL, "<ogf> <ocf> [data]", cmd_hci_cmd, 3, 1),
@@ -1417,14 +1417,9 @@ SHELL_CREATE_STATIC_SUBCMD_SET(bt_cmds) {
 #endif /* CONFIG_BT_CTLR_ADV_EXT */
 #if defined(CONFIG_BT_LL_SW_SPLIT)
 	SHELL_CMD(ull_reset, NULL, HELP_NONE, cmd_ull_reset),
-#if defined(CONFIG_BT_TMP)
-	SHELL_CMD(ull_tmp_enable, NULL, "<on off> [handle]",
-		  cmd_ull_tmp_enable),
-	SHELL_CMD(ull_tmp_send, NULL, "[handle]", cmd_ull_tmp_send),
-#endif /* CONFIG_BT_TMP */
 #endif /* CONFIG_BT_LL_SW_SPLIT */
 	SHELL_SUBCMD_SET_END
-};
+);
 
 static int cmd_bt(const struct shell *shell, size_t argc, char **argv)
 {

@@ -205,6 +205,7 @@ clock: clock@5000 {
 	reg = <0x5000 0x1000>;
 	interrupts = <5 1>;
 	status = "ok";
+	label = "CLOCK";
 };
 
 power: power@5000 {
@@ -218,6 +219,7 @@ wdt: watchdog@18000 {
 	compatible = "nordic,nrf-watchdog";
 	reg = <0x18000 0x1000>;
 	interrupts = <24 1>;
+	status = "ok";
 	label = "WDT";
 };
 

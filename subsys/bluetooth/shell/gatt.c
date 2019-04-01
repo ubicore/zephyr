@@ -318,7 +318,7 @@ static int cmd_write(const struct shell *shell, size_t argc, char *argv[])
 		size_t len;
 		int i;
 
-		len = min(strtoul(argv[4], NULL, 16), sizeof(gatt_write_buf));
+		len = MIN(strtoul(argv[4], NULL, 16), sizeof(gatt_write_buf));
 
 		for (i = 1; i < len; i++) {
 			gatt_write_buf[i] = gatt_write_buf[0];
@@ -371,7 +371,7 @@ static int cmd_write_without_rsp(const struct shell *shell,
 	if (argc > 3) {
 		int i;
 
-		len = min(strtoul(argv[3], NULL, 16), sizeof(gatt_write_buf));
+		len = MIN(strtoul(argv[3], NULL, 16), sizeof(gatt_write_buf));
 
 		for (i = 1; i < len; i++) {
 			gatt_write_buf[i] = gatt_write_buf[0];
@@ -673,7 +673,7 @@ static ssize_t read_met(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 	const char *value = attr->user_data;
 	u16_t value_len;
 
-	value_len = min(strlen(value), CHAR_SIZE_MAX);
+	value_len = MIN(strlen(value), CHAR_SIZE_MAX);
 
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, value,
 				 value_len);
@@ -766,7 +766,7 @@ static int cmd_metrics(const struct shell *shell, size_t argc, char *argv[])
 
 #define HELP_NONE "[none]"
 
-SHELL_CREATE_STATIC_SUBCMD_SET(gatt_cmds) {
+SHELL_STATIC_SUBCMD_SET_CREATE(gatt_cmds,
 #if defined(CONFIG_BT_GATT_CLIENT)
 	SHELL_CMD_ARG(discover-characteristic, NULL,
 		      "[UUID] [start handle] [end handle]", cmd_discover, 1, 3),
@@ -807,7 +807,7 @@ SHELL_CREATE_STATIC_SUBCMD_SET(gatt_cmds) {
 		      "unregister pre-predefined test service",
 		      cmd_unregister_test_svc, 1, 0),
 	SHELL_SUBCMD_SET_END
-};
+);
 
 static int cmd_gatt(const struct shell *shell, size_t argc, char **argv)
 {

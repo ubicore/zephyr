@@ -314,7 +314,15 @@ int bt_hci_cmd_send_sync(u16_t opcode, struct net_buf *buf,
 	BT_DBG("opcode 0x%04x status 0x%02x", opcode, cmd(buf)->status);
 
 	if (cmd(buf)->status) {
-		err = -EIO;
+		switch (cmd(buf)->status) {
+		case BT_HCI_ERR_CONN_LIMIT_EXCEEDED:
+			err = -ECONNREFUSED;
+			break;
+		default:
+			err = -EIO;
+			break;
+		}
+
 		net_buf_unref(buf);
 	} else {
 		err = 0;
@@ -845,41 +853,62 @@ static void enh_conn_complete(struct bt_hci_evt_le_enh_conn_complete *evt)
 	}
 #endif
 
-	if (IS_ENABLED(CONFIG_BT_CENTRAL)) {
-		if (evt->status) {
-			/*
-			 * if there was an error we are only interested in pending
-			 * connection so there is no need to check ID address as
-			 * only one connection can be in that state
-			 *
-			 * Depending on error code address might not be valid anyway.
-			 */
-			conn = find_pending_connect(NULL);
-			if (!conn) {
-				return;
-			}
-
-			conn->err = evt->status;
-
+	if (evt->status) {
 		/*
-		 * Handle advertising timeout after high duty directed
-		 * advertising.
+		 * If there was an error we are only interested in pending
+		 * connection. There is no need to check ID address as
+		 * only one connection can be in that state.
+		 *
+		 * Depending on error code address might not be valid anyway.
 		 */
-		if (conn->err == BT_HCI_ERR_ADV_TIMEOUT) {
-			atomic_clear_bit(bt_dev.flags, BT_DEV_ADVERTISING);
+		conn = find_pending_connect(NULL);
+		if (!conn) {
+			return;
 		}
 
-			bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+		conn->err = evt->status;
 
-			/* check if device is market for auto connect */
-			if (atomic_test_bit(conn->flags, BT_CONN_AUTO_CONNECT)) {
-				bt_conn_set_state(conn, BT_CONN_CONNECT_SCAN);
+		if (IS_ENABLED(CONFIG_BT_PERIPHERAL)) {
+			/*
+			 * Handle advertising timeout after high duty directed
+			 * advertising.
+			 */
+			if (conn->err == BT_HCI_ERR_ADV_TIMEOUT) {
+				atomic_clear_bit(bt_dev.flags,
+						 BT_DEV_ADVERTISING);
+				bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+
+				goto done;
 			}
-
-			goto done;
 		}
-	} else {
-		BT_ASSERT(evt->status == 0);
+
+		if (IS_ENABLED(CONFIG_BT_CENTRAL)) {
+			/*
+			 * Handle cancellation of outgoing connection attempt.
+			 */
+			if (conn->err == BT_HCI_ERR_UNKNOWN_CONN_ID) {
+				/* We notify before checking autoconnect flag
+				 * as application may choose to change it from
+				 * callback.
+				 */
+				bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+
+				/* Check if device is marked for autoconnect. */
+				if (atomic_test_bit(conn->flags,
+						    BT_CONN_AUTO_CONNECT)) {
+					bt_conn_set_state(conn,
+							  BT_CONN_CONNECT_SCAN);
+				}
+
+				goto done;
+			}
+		}
+
+		BT_WARN("Unexpected status 0x%02x", evt->status);
+
+		bt_conn_unref(conn);
+
+		return;
 	}
 
 	bt_addr_le_copy(&id_addr, &evt->peer_addr);
@@ -3644,7 +3673,7 @@ static void read_buffer_size_complete(struct net_buf *buf)
 
 	BT_DBG("ACL BR/EDR buffers: pkts %u mtu %u", pkts, bt_dev.le.mtu);
 
-	pkts = min(pkts, CONFIG_BT_CONN_TX_MAX);
+	pkts = MIN(pkts, CONFIG_BT_CONN_TX_MAX);
 
 	k_sem_init(&bt_dev.le.pkts, pkts, pkts);
 }
@@ -3665,7 +3694,7 @@ static void le_read_buffer_size_complete(struct net_buf *buf)
 
 	BT_DBG("ACL LE buffers: pkts %u mtu %u", rp->le_max_num, bt_dev.le.mtu);
 
-	le_max_num = min(rp->le_max_num, CONFIG_BT_CONN_TX_MAX);
+	le_max_num = MIN(rp->le_max_num, CONFIG_BT_CONN_TX_MAX);
 	k_sem_init(&bt_dev.le.pkts, le_max_num, le_max_num);
 }
 #endif
@@ -4269,7 +4298,7 @@ static const char *ver_str(u8_t ver)
 {
 	const char * const str[] = {
 		"1.0b", "1.1", "1.2", "2.0", "2.1", "3.0", "4.0", "4.1", "4.2",
-		"5.0",
+		"5.0", "5.1",
 	};
 
 	if (ver < ARRAY_SIZE(str)) {
@@ -4850,7 +4879,7 @@ int bt_set_id_addr(const bt_addr_le_t *addr)
 
 void bt_id_get(bt_addr_le_t *addrs, size_t *count)
 {
-	size_t to_copy = min(*count, bt_dev.id_count);
+	size_t to_copy = MIN(*count, bt_dev.id_count);
 
 	memcpy(addrs, bt_dev.id_addr, to_copy * sizeof(bt_addr_le_t));
 	*count = to_copy;
@@ -5045,7 +5074,7 @@ static uint8_t bt_read_static_addr(bt_addr_le_t *addr)
 		return 0;
 	}
 	rp = (void *)rsp->data;
-	cnt = min(rp->num_addrs, CONFIG_BT_ID_MAX);
+	cnt = MIN(rp->num_addrs, CONFIG_BT_ID_MAX);
 
 	for (i = 0; i < cnt; i++) {
 		addr[i].type = BT_ADDR_LE_RANDOM;

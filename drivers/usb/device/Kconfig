@@ -63,6 +63,7 @@ menuconfig USB_NRF52840
 	select USB_DEVICE_DRIVER
 	select HAS_DTS_USB
 	select NRFX_USBD
+	select USB_DEVICE_REMOTE_WAKEUP
 	help
 	  nRF52840 USB Device Controller Driver
 
@@ -90,5 +91,11 @@ config USB_DC_STM32_DISCONN_ENABLE
 	help
 	  Say Y if your board uses USB DISCONNECT pin to enable the
 	  pull-up resistor on USB DP.
+
+config USB_NATIVE_POSIX
+	bool "Native Posix USB Device Controller Driver"
+	select USB_DEVICE_DRIVER
+	help
+	  Native Posix USB Device Controller Driver.
 
 endif # USB

@@ -532,9 +532,11 @@ static inline bool read_rxfifo_content(struct mcr20a_context *dev,
 		.count = 2
 	};
 
-	if (spi_transceive(dev->spi, &dev->spi_cfg, &tx, &rx) == 0) {
-		net_buf_add(buf, len);
+	if (spi_transceive(dev->spi, &dev->spi_cfg, &tx, &rx) != 0) {
+		return false;
 	}
+
+	net_buf_add(buf, len);
 
 	return true;
 }
@@ -542,26 +544,18 @@ static inline bool read_rxfifo_content(struct mcr20a_context *dev,
 static inline void mcr20a_rx(struct mcr20a_context *mcr20a, u8_t len)
 {
 	struct net_pkt *pkt = NULL;
-	struct net_buf *frag;
 	u8_t pkt_len;
 
 	pkt_len = len - MCR20A_FCS_LENGTH;
 
-	pkt = net_pkt_get_reserve_rx(K_NO_WAIT);
+	pkt = net_pkt_alloc_with_buffer(mcr20a->iface, pkt_len,
+					AF_UNSPEC, 0, K_NO_WAIT);
 	if (!pkt) {
 		LOG_ERR("No buf available");
 		goto out;
 	}
 
-	frag = net_pkt_get_frag(pkt, K_NO_WAIT);
-	if (!frag) {
-		LOG_ERR("No frag available");
-		goto out;
-	}
-
-	net_pkt_frag_insert(pkt, frag);
-
-	if (!read_rxfifo_content(mcr20a, frag, pkt_len)) {
+	if (!read_rxfifo_content(mcr20a, pkt->buffer, pkt_len)) {
 		LOG_ERR("No content read");
 		goto out;
 	}
@@ -1384,23 +1378,23 @@ static inline int configure_spi(struct device *dev)
 		return -ENODEV;
 	}
 
-#if defined(CONFIG_IEEE802154_MCR20A_GPIO_SPI_CS)
+#if defined(DT_NXP_MCR20A_0_CS_GPIO_CONTROLLER)
 	mcr20a->cs_ctrl.gpio_dev = device_get_binding(
-		DT_NXP_MCR20A_0_GPIO_SPI_CS_DRV_NAME);
+		DT_NXP_MCR20A_0_CS_GPIO_CONTROLLER);
 	if (!mcr20a->cs_ctrl.gpio_dev) {
 		LOG_ERR("Unable to get GPIO SPI CS device");
 		return -ENODEV;
 	}
 
-	mcr20a->cs_ctrl.gpio_pin = DT_NXP_MCR20A_0_GPIO_SPI_CS_PIN;
+	mcr20a->cs_ctrl.gpio_pin = DT_NXP_MCR20A_0_CS_GPIO_PIN;
 	mcr20a->cs_ctrl.delay = 0;
 
 	mcr20a->spi_cfg.cs = &mcr20a->cs_ctrl;
 
 	LOG_DBG("SPI GPIO CS configured on %s:%u",
-		DT_NXP_MCR20A_0_GPIO_SPI_CS_DRV_NAME,
-		DT_NXP_MCR20A_0_GPIO_SPI_CS_PIN);
-#endif /* CONFIG_IEEE802154_MCR20A_GPIO_SPI_CS */
+		DT_NXP_MCR20A_0_CS_GPIO_CONTROLLER,
+		DT_NXP_MCR20A_0_CS_GPIO_PIN);
+#endif /* DT_NXP_MCR20A_0_CS_GPIO_CONTROLLER */
 
 	mcr20a->spi_cfg.frequency = DT_NXP_MCR20A_0_SPI_MAX_FREQUENCY;
 	mcr20a->spi_cfg.operation = SPI_WORD_SET(8);

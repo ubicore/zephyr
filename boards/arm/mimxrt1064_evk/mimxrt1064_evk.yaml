@@ -14,3 +14,6 @@ toolchain:
   - xtools
 ram: 128
 flash: 128
+supported:
+  - hwinfo
+  - netif:eth

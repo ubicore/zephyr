@@ -41,7 +41,9 @@ extern struct net_if __net_if_end[];
 extern struct net_if_dev __net_if_dev_start[];
 extern struct net_if_dev __net_if_dev_end[];
 
+#if defined(CONFIG_NET_IPV4) || defined(CONFIG_NET_IPV6)
 static struct net_if_router routers[CONFIG_NET_MAX_ROUTERS];
+#endif
 
 #if defined(CONFIG_NET_IPV6)
 /* Timer that triggers network address renewal */
@@ -284,11 +286,7 @@ enum net_verdict net_if_send_data(struct net_if *iface, struct net_pkt *pkt)
 	 * cache.
 	 */
 	if (net_pkt_family(pkt) == AF_INET6) {
-		pkt = net_ipv6_prepare_for_send(pkt);
-		if (!pkt) {
-			verdict = NET_CONTINUE;
-			goto done;
-		}
+		verdict = net_ipv6_prepare_for_send(pkt);
 	}
 #endif
 
@@ -372,6 +370,9 @@ struct net_if *net_if_get_default(void)
 #if defined(CONFIG_NET_DEFAULT_IF_OFFLOAD)
 	iface = net_if_get_first_by_type(NULL);
 #endif
+#if defined(CONFIG_NET_DEFAULT_IF_CANBUS)
+	iface = net_if_get_first_by_type(&NET_L2_GET_NAME(CANBUS));
+#endif
 
 	return iface ? iface : __net_if_start;
 }
@@ -395,6 +396,7 @@ struct net_if *net_if_get_first_by_type(const struct net_l2 *l2)
 	return NULL;
 }
 
+#if defined(CONFIG_NET_IPV4) || defined(CONFIG_NET_IPV6)
 /* Return how many bits are shared between two IP addresses */
 static u8_t get_ipaddr_diff(const u8_t *src, const u8_t *dst, int addr_len)
 {
@@ -420,6 +422,7 @@ static u8_t get_ipaddr_diff(const u8_t *src, const u8_t *dst, int addr_len)
 
 	return len;
 }
+#endif
 
 int net_if_config_ipv6_get(struct net_if *iface, struct net_if_ipv6 **ipv6)
 {
@@ -1970,6 +1973,13 @@ static struct in6_addr *net_if_ipv6_get_best_match(struct net_if *iface,
 
 		len = get_diff_ipv6(dst, &ipv6->unicast[i].address.in6_addr);
 		if (len >= *best_so_far) {
+			/* Mesh local address can only be selected for the same
+			 * subnet.
+			 */
+			if (ipv6->unicast[i].is_mesh_local && len < 64) {
+				continue;
+			}
+
 			*best_so_far = len;
 			src = &ipv6->unicast[i].address.in6_addr;
 		}
@@ -2743,7 +2753,6 @@ enum net_verdict net_if_recv_data(struct net_if *iface, struct net_pkt *pkt)
 		net_pkt_ref(pkt);
 
 		verdict = net_if_l2(iface)->recv(iface, pkt);
-
 		if (verdict == NET_CONTINUE) {
 			new_pkt = net_pkt_clone(pkt, K_NO_WAIT);
 		} else {
@@ -2809,21 +2818,27 @@ bool net_if_need_calc_rx_checksum(struct net_if *iface)
 	return need_calc_checksum(iface, ETHERNET_HW_RX_CHKSUM_OFFLOAD);
 }
 
-struct net_if *net_if_get_by_index(u8_t index)
+struct net_if *net_if_get_by_index(int index)
 {
-	if (&__net_if_start[index] >= __net_if_end) {
+	if (index <= 0) {
+		return NULL;
+	}
+
+	if (&__net_if_start[index - 1] >= __net_if_end) {
 		NET_DBG("Index %d is too large", index);
 		return NULL;
 	}
 
-	return &__net_if_start[index];
+	return &__net_if_start[index - 1];
 }
 
-u8_t net_if_get_by_iface(struct net_if *iface)
+int net_if_get_by_iface(struct net_if *iface)
 {
-	NET_ASSERT(iface >= __net_if_start && iface < __net_if_end);
+	if (!(iface >= __net_if_start && iface < __net_if_end)) {
+		return -1;
+	}
 
-	return iface - __net_if_start;
+	return (iface - __net_if_start) + 1;
 }
 
 void net_if_foreach(net_if_cb_t cb, void *user_data)
@@ -3061,7 +3076,10 @@ void net_if_add_tx_timestamp(struct net_pkt *pkt)
 void net_if_init(void)
 {
 	struct net_if *iface;
-	int i, if_count;
+	int if_count;
+#if defined(CONFIG_NET_IPV4) || defined(CONFIG_NET_IPV6)
+	int i;
+#endif
 
 	NET_DBG("");
 

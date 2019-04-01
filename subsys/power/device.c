@@ -11,7 +11,8 @@
 #include <device.h>
 #include "policy/pm_policy.h"
 
-#define LOG_LEVEL CONFIG_PM_LOG_LEVEL /* From power module Kconfig */
+#if defined(CONFIG_SYS_POWER_MANAGEMENT)
+#define LOG_LEVEL CONFIG_SYS_PM_LOG_LEVEL /* From power module Kconfig */
 #include <logging/log.h>
 LOG_MODULE_DECLARE(power);
 
@@ -21,13 +22,13 @@ LOG_MODULE_DECLARE(power);
  * to build the device list based on devices power
  * and clock domain dependencies.
  */
-#ifdef CONFIG_SOC_SERIES_NRF52X
+#if defined(CONFIG_SOC_SERIES_NRF52X) || defined(CONFIG_SOC_SERIES_NRF51X)
 #define MAX_PM_DEVICES	15
 #define NUM_CORE_DEVICES	4
 #define MAX_DEV_NAME_LEN	16
 static const char core_devices[NUM_CORE_DEVICES][MAX_DEV_NAME_LEN] = {
-	"clk_k32src",
-	"clk_m16src",
+	"CLOCK_32K",
+	"CLOCK_16M",
 	"sys_clock",
 	"UART_0",
 };
@@ -129,3 +130,4 @@ void sys_pm_create_device_list(void)
 		}
 	}
 }
+#endif /* defined(CONFIG_SYS_POWER_MANAGEMENT) */

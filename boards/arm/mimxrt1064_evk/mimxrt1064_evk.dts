@@ -21,15 +21,10 @@
 		uart-1 = &uart1;
 		led0 = &green_led;
 		sw0 = &user_button;
+		eth = &eth;
 	};
 
 	chosen {
-#if defined(CONFIG_CODE_ITCM)
-		zephyr,flash = &itcm0;
-#elif defined(CONFIG_CODE_INTERNAL_QSPI)
-		zephyr,flash = &w25q32jvwj0;
-#endif
-		zephyr,sram = &dtcm0;
 		zephyr,console = &uart1;
 		zephyr,shell-uart = &uart1;
 	};
@@ -37,6 +32,7 @@
 	sdram0: memory@80000000 {
 		/* Micron MT48LC16M16A2B4-6AIT:G */
 		device_type = "memory";
+		compatible = "mmio-sram";
 		reg = <0x80000000 0x2000000>;
 	};
 
@@ -70,4 +66,11 @@
 &uart1 {
 	status = "ok";
 	current-speed = <115200>;
+};
+
+&eth {
+	status = "ok";
+	ptp {
+		status = "ok";
+	};
 };
