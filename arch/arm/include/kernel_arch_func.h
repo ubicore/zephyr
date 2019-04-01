@@ -34,6 +34,9 @@ extern void z_arch_configure_static_mpu_regions(void);
 extern void z_arch_configure_dynamic_mpu_regions(struct k_thread *thread);
 #endif /* CONFIG_ARM_MPU */
 
+extern FUNC_NORETURN void _thread_entry(k_thread_entry_t entry,
+			  void *p1, void *p2, void *p3);
+
 static ALWAYS_INLINE void kernel_arch_init(void)
 {
 	_InterruptStackSetup();
@@ -72,7 +75,7 @@ z_arch_switch_to_main_thread(struct k_thread *main_thread,
 	start_of_main_stack = (void *)STACK_ROUND_DOWN(start_of_main_stack);
 
 #ifdef CONFIG_TRACING
-	z_sys_trace_thread_switched_out();
+	//z_sys_trace_thread_switched_out();
 #endif
 	_current = main_thread;
 #ifdef CONFIG_TRACING
